@@ -25,7 +25,27 @@ def get_color_by_stock(quantity):
     else:
         return [0, 255, 0]  # Green (high stock)
 
-def create_3d_warehouse_plotly(df):
+def get_color_by_stock_level(quantity, highlight_overstock=False, highlight_understock=False, 
+                            overstock_threshold=15, understock_threshold=5, base_color=None):
+    """Return color based on stock quantity and highlighting preferences."""
+    if quantity == 0:
+        return 'rgb(220, 220, 220)'  # Empty location - light grey
+    
+    if highlight_understock and quantity > 0 and quantity <= understock_threshold:
+        return 'rgb(255, 0, 0)'  # Understock - bright red
+    
+    if highlight_overstock and quantity >= overstock_threshold:
+        return 'rgb(255, 215, 0)'  # Overstock - gold
+    
+    # If no highlighting or not meeting criteria, use base color or default blue
+    if base_color and isinstance(base_color, list) and len(base_color) >= 3:
+        return f'rgb({base_color[0]}, {base_color[1]}, {base_color[2]})'
+    
+    # Default color if no base color provided
+    return 'rgb(0, 0, 255)'  # Default blue
+
+def create_3d_warehouse_plotly(df, highlight_overstock=False, highlight_understock=False,
+                             overstock_threshold=15, understock_threshold=5):
     """Create a 3D warehouse visualization using Plotly."""
     
     fig = go.Figure()
@@ -82,15 +102,17 @@ def create_3d_warehouse_plotly(df):
         if filled_mask.any():
             filled_df = zone_df[filled_mask]
             
-            # Ensure colors are properly formatted
+            # Apply highlighting for overstock/understock
             filled_colors = []
             for _, row in filled_df.iterrows():
-                if isinstance(row.color, list) and len(row.color) >= 3:
-                    # Format RGB values properly
-                    filled_colors.append(f'rgb({row.color[0]}, {row.color[1]}, {row.color[2]})')
-                else:
-                    # Default color
-                    filled_colors.append('rgb(0, 0, 255)')
+                filled_colors.append(get_color_by_stock_level(
+                    quantity=row.quantity,
+                    highlight_overstock=highlight_overstock,
+                    highlight_understock=highlight_understock,
+                    overstock_threshold=overstock_threshold,
+                    understock_threshold=understock_threshold,
+                    base_color=row.color
+                ))
             
             filled_sizes = [max(5, min(row.quantity * 0.5, 15)) for _, row in filled_df.iterrows()]
             filled_hovertext = [
@@ -100,6 +122,8 @@ def create_3d_warehouse_plotly(df):
                 f"Product: {row.product_id}<br>"
                 f"Quantity: {row.quantity}"
                 + (f"<br>Depth: {row.depth_info}" if row.depth_info else "")
+                + (f"<br><b>UNDERSTOCK</b>" if highlight_understock and row.quantity > 0 and row.quantity <= understock_threshold else "")
+                + (f"<br><b>OVERSTOCK</b>" if highlight_overstock and row.quantity >= overstock_threshold else "")
                 for _, row in filled_df.iterrows()
             ]
             
@@ -169,7 +193,8 @@ def create_3d_warehouse_plotly(df):
     
     return fig
 
-def create_2d_warehouse_map(df):
+def create_2d_warehouse_map(df, highlight_overstock=False, highlight_understock=False,
+                          overstock_threshold=15, understock_threshold=5):
     """Create a 2D top-down view of the warehouse."""
     
     fig = go.Figure()
@@ -178,37 +203,80 @@ def create_2d_warehouse_map(df):
     for zone in df['zone'].unique():
         zone_df = df[df['zone'] == zone].drop_duplicates(['x', 'y'])
         
-        # Create hover text
-        hovertext = [
-            f"Zone: {row.zone}<br>"
-            f"Product Type: {row.product_type}"
-            + (f"<br>Depth: {row.depth_info}" if row.depth_info else "")
-            for _, row in zone_df.iterrows()
-        ]
+        # Empty locations
+        empty_df = zone_df[zone_df['quantity'] == 0]
+        if not empty_df.empty:
+            # Default colors for empty locations
+            empty_colors = []
+            for _, row in empty_df.iterrows():
+                if isinstance(row.color, list) and len(row.color) >= 3:
+                    empty_colors.append(f'rgb({row.color[0]}, {row.color[1]}, {row.color[2]})')
+                else:
+                    empty_colors.append('rgb(220, 220, 220)')
+            
+            empty_hovertext = [
+                f"Zone: {row.zone}<br>"
+                f"Product Type: {row.product_type}<br>"
+                f"Status: Empty"
+                + (f"<br>Depth: {row.depth_info}" if row.depth_info else "")
+                for _, row in empty_df.iterrows()
+            ]
+            
+            fig.add_trace(go.Scatter(
+                x=empty_df['x'],
+                y=empty_df['y'],
+                mode='markers',
+                marker=dict(
+                    size=10,
+                    color=empty_colors,
+                    symbol='square',
+                    opacity=0.5,
+                    line=dict(width=1, color='rgb(50,50,50)')
+                ),
+                text=empty_hovertext,
+                hoverinfo='text',
+                name=f"Zone {zone} - Empty"
+            ))
         
-        # Ensure colors are properly formatted
-        colors = []
-        for _, row in zone_df.iterrows():
-            if isinstance(row.color, list) and len(row.color) >= 3:
-                colors.append(f'rgb({row.color[0]}, {row.color[1]}, {row.color[2]})')
-            else:
-                # Default color
-                colors.append('rgb(0, 0, 255)')
-        
-        fig.add_trace(go.Scatter(
-            x=zone_df['x'],
-            y=zone_df['y'],
-            mode='markers',
-            marker=dict(
-                size=10,
-                color=colors,
-                symbol='square',
-                line=dict(width=1, color='rgb(50,50,50)')
-            ),
-            text=hovertext,
-            hoverinfo='text',
-            name=f"Zone {zone} - {zone_df['product_type'].iloc[0]}"
-        ))
+        # Filled locations
+        filled_df = zone_df[zone_df['quantity'] > 0]
+        if not filled_df.empty:
+            # Apply highlighting for overstock/understock
+            filled_colors = []
+            for _, row in filled_df.iterrows():
+                filled_colors.append(get_color_by_stock_level(
+                    quantity=row.quantity,
+                    highlight_overstock=highlight_overstock,
+                    highlight_understock=highlight_understock,
+                    overstock_threshold=overstock_threshold,
+                    understock_threshold=understock_threshold,
+                    base_color=row.color
+                ))
+            
+            filled_hovertext = [
+                f"Zone: {row.zone}<br>"
+                f"Product Type: {row.product_type}<br>"
+                f"Quantity: {row.quantity}"
+                + (f"<br>Depth: {row.depth_info}" if row.depth_info else "")
+                + (f"<br><b>UNDERSTOCK</b>" if highlight_understock and row.quantity > 0 and row.quantity <= understock_threshold else "")
+                + (f"<br><b>OVERSTOCK</b>" if highlight_overstock and row.quantity >= overstock_threshold else "")
+                for _, row in filled_df.iterrows()
+            ]
+            
+            fig.add_trace(go.Scatter(
+                x=filled_df['x'],
+                y=filled_df['y'],
+                mode='markers',
+                marker=dict(
+                    size=10,
+                    color=filled_colors,
+                    symbol='square',
+                    line=dict(width=1, color='rgb(50,50,50)')
+                ),
+                text=filled_hovertext,
+                hoverinfo='text',
+                name=f"Zone {zone} - {filled_df['product_type'].iloc[0]}"
+            ))
     
     # Add text labels for each zone
     for zone, group in df.groupby('zone'):
@@ -227,6 +295,26 @@ def create_2d_warehouse_map(df):
                 textfont=dict(size=14, color='black'),
                 showlegend=False
             ))
+    
+    # Add legend for stock levels if highlighting is enabled
+    if highlight_overstock or highlight_understock:
+        fig.add_trace(go.Scatter(
+            x=[None],
+            y=[None],
+            mode='markers',
+            marker=dict(size=10, color='rgb(255, 0, 0)'),
+            name='Understock' if highlight_understock else '',
+            showlegend=highlight_understock
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=[None],
+            y=[None],
+            mode='markers',
+            marker=dict(size=10, color='rgb(255, 215, 0)'),
+            name='Overstock' if highlight_overstock else '',
+            showlegend=highlight_overstock
+        ))
     
     # Update layout
     fig.update_layout(

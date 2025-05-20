@@ -101,17 +101,93 @@ if len(zone_stats) > 5:
 else:
     st.sidebar.dataframe(zone_stats, use_container_width=True)
 
+# Highlighting options
+st.sidebar.header("Highlight Options")
+st.sidebar.markdown("Highlight stock level issues")
+
+highlight_col1, highlight_col2 = st.sidebar.columns(2)
+
+with highlight_col1:
+    highlight_understock = st.checkbox("Highlight Understock")
+    understock_threshold = st.number_input(
+        "Understock Threshold", 
+        min_value=1, 
+        max_value=10, 
+        value=5, 
+        help="Locations with stock below this value will be marked as understock"
+    ) if highlight_understock else 5
+
+with highlight_col2:
+    highlight_overstock = st.checkbox("Highlight Overstock")
+    overstock_threshold = st.number_input(
+        "Overstock Threshold", 
+        min_value=10, 
+        max_value=50, 
+        value=15, 
+        help="Locations with stock above this value will be marked as overstock"
+    ) if highlight_overstock else 15
+
+# Add explanation
+if highlight_understock or highlight_overstock:
+    st.sidebar.info(
+        "🔴 Red = Understock (0 < qty ≤ " + str(understock_threshold) + ")\n"
+        "🟡 Gold = Overstock (qty ≥ " + str(overstock_threshold) + ")"
+    )
+
 # Main visualization
 st.header("Warehouse Visualization")
 
 if viz_type == "2D Map":
-    fig_2d = create_2d_warehouse_map(filtered_df)
+    fig_2d = create_2d_warehouse_map(
+        filtered_df, 
+        highlight_overstock=highlight_overstock,
+        highlight_understock=highlight_understock,
+        overstock_threshold=overstock_threshold,
+        understock_threshold=understock_threshold
+    )
     st.plotly_chart(fig_2d, use_container_width=True)
     st.caption("2D Layout - Hover over locations for details")
 else:  # 3D Plotly
-    fig = create_3d_warehouse_plotly(filtered_df)
+    fig = create_3d_warehouse_plotly(
+        filtered_df,
+        highlight_overstock=highlight_overstock,
+        highlight_understock=highlight_understock,
+        overstock_threshold=overstock_threshold,
+        understock_threshold=understock_threshold
+    )
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Use mouse to navigate: rotate (drag), zoom (scroll), pan (right-click+drag)")
+
+# Stock level analysis section
+if highlight_understock or highlight_overstock:
+    with st.expander("Stock Level Analysis"):
+        # Calculate statistics
+        understock_count = len(filtered_df[(filtered_df['quantity'] > 0) & 
+                                          (filtered_df['quantity'] <= understock_threshold)])
+        overstock_count = len(filtered_df[filtered_df['quantity'] >= overstock_threshold])
+        normal_count = len(filtered_df[(filtered_df['quantity'] > understock_threshold) & 
+                                      (filtered_df['quantity'] < overstock_threshold)])
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Understock Locations", understock_count, 
+                   f"{understock_count/filled_locations*100:.1f}% of filled" if filled_locations > 0 else "0%")
+        col2.metric("Normal Stock Locations", normal_count,
+                   f"{normal_count/filled_locations*100:.1f}% of filled" if filled_locations > 0 else "0%")
+        col3.metric("Overstock Locations", overstock_count,
+                   f"{overstock_count/filled_locations*100:.1f}% of filled" if filled_locations > 0 else "0%")
+        
+        # Create a zone-wise analysis
+        zone_analysis = filtered_df[filtered_df['quantity'] > 0].groupby('zone').apply(
+            lambda x: pd.Series({
+                'Total Items': x['quantity'].sum(),
+                'Understock': len(x[(x['quantity'] > 0) & (x['quantity'] <= understock_threshold)]),
+                'Normal': len(x[(x['quantity'] > understock_threshold) & (x['quantity'] < overstock_threshold)]),
+                'Overstock': len(x[x['quantity'] >= overstock_threshold])
+            })
+        ).reset_index()
+        
+        st.subheader("Stock Levels by Zone")
+        st.dataframe(zone_analysis, use_container_width=True)
 
 # Product information
 with st.expander("Product Type Information"):
