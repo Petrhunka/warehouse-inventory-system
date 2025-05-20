@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import datetime
 from warehouse_data import get_warehouse_data, generate_realistic_warehouse
 from visualization import create_3d_warehouse_plotly, create_2d_warehouse_map
 
@@ -25,14 +26,22 @@ if 'data_loaded' not in st.session_state:
     
     st.session_state['warehouse_data'] = df
     st.session_state['data_loaded'] = True
+    
+    # Initialize stocktaking session state
+    if 'stocktaking_date' not in st.session_state:
+        st.session_state['stocktaking_date'] = datetime.datetime.now().strftime("%Y-%m-%d")
+    if 'verified_locations' not in st.session_state:
+        st.session_state['verified_locations'] = {}
+    if 'notes' not in st.session_state:
+        st.session_state['notes'] = {}
 else:
     df = st.session_state['warehouse_data']
 
 # Title at the top level
 st.title("Warehouse Layout & Inventory System")
 
-# Create tabs for visualization and inventory reporting
-tab1, tab2 = st.tabs(["Warehouse Visualization", "Inventory Level Reporting"])
+# Create tabs for visualization, inventory reporting, and stocktaking
+tab1, tab2, tab3 = st.tabs(["Warehouse Visualization", "Inventory Level Reporting", "Stocktaking Assistant"])
 
 # TAB 1: WAREHOUSE VISUALIZATION
 with tab1:
@@ -498,6 +507,229 @@ with tab2:
         "text/csv",
         key='download-inventory-report'
     )
+
+# TAB 3: STOCKTAKING ASSISTANT
+with tab3:
+    st.header("Stocktaking Assistant")
+    st.markdown("""
+    This tool is designed for warehouse staff to efficiently check and verify inventory levels, 
+    particularly focusing on locations with potential overstock or discrepancies.
+    """)
+    
+    # Set up the stocktaking date
+    st.subheader("Stocktaking Session")
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    stocktaking_date = st.date_input(
+        "Stocktaking Date", 
+        value=datetime.datetime.strptime(st.session_state['stocktaking_date'], "%Y-%m-%d").date(),
+        key="stocktake_date"
+    )
+    st.session_state['stocktaking_date'] = stocktaking_date.strftime("%Y-%m-%d")
+    
+    # Select worker name
+    worker_name = st.text_input("Worker Name", value="", key="worker_name")
+    
+    # Filter options for stocktaking
+    stock_filters, stock_list = st.columns([1, 2])
+    
+    with stock_filters:
+        st.subheader("Stocktaking Filters")
+        
+        # Zone filter for stocktaking
+        stocktake_zones = st.multiselect(
+            "Select Zones to Check",
+            options=all_zones,
+            default=all_zones[:3] if len(all_zones) >= 3 else all_zones
+        )
+        
+        # Product type filter for stocktaking
+        stocktake_products = st.multiselect(
+            "Product Types to Check",
+            options=product_types,
+            default=product_types[:3] if len(product_types) >= 3 else product_types
+        )
+        
+        # Focus filter
+        stocktake_focus = st.radio(
+            "Focus On",
+            ["Overstock Locations", "All Locations", "Empty Locations"]
+        )
+        
+        # Stock threshold
+        stocktake_threshold = st.slider(
+            "Overstock Threshold", 
+            min_value=10, 
+            max_value=50, 
+            value=15
+        )
+        
+        # Sorting option
+        stocktake_sort = st.selectbox(
+            "Sort By",
+            ["Zone", "Quantity (High to Low)", "Product Type", "Location ID"]
+        )
+    
+    # Apply stocktaking filters
+    with stock_list:
+        # Filter based on user selections
+        if stocktake_focus == "Overstock Locations":
+            stocktake_df = df[
+                (df['zone'].isin(stocktake_zones)) &
+                (df['product_type'].isin(stocktake_products)) &
+                (df['quantity'] >= stocktake_threshold)
+            ]
+        elif stocktake_focus == "Empty Locations":
+            stocktake_df = df[
+                (df['zone'].isin(stocktake_zones)) &
+                (df['product_type'].isin(stocktake_products)) &
+                (df['quantity'] == 0)
+            ]
+        else:  # All Locations
+            stocktake_df = df[
+                (df['zone'].isin(stocktake_zones)) &
+                (df['product_type'].isin(stocktake_products))
+            ]
+        
+        # Sort the data
+        if stocktake_sort == "Quantity (High to Low)":
+            stocktake_df = stocktake_df.sort_values('quantity', ascending=False)
+        elif stocktake_sort == "Zone":
+            stocktake_df = stocktake_df.sort_values('zone')
+        elif stocktake_sort == "Product Type":
+            stocktake_df = stocktake_df.sort_values('product_type')
+        else:  # Location ID
+            stocktake_df = stocktake_df.sort_values('location_id')
+        
+        # Display stocktaking stats
+        st.subheader("Stocktaking Task")
+        total_to_check = len(stocktake_df)
+        completed = sum(1 for loc in stocktake_df['location_id'] if loc in st.session_state['verified_locations'])
+        
+        st.progress(completed / total_to_check if total_to_check > 0 else 0)
+        st.markdown(f"**{completed}** of **{total_to_check}** locations verified")
+        
+        # Display the stocktaking list
+        st.subheader(f"Locations to Check ({total_to_check})")
+        
+        # If no locations match criteria
+        if len(stocktake_df) == 0:
+            st.info("No locations match the current criteria. Please adjust your filters.")
+        else:
+            # Create stocktaking interface
+            for idx, row in stocktake_df.iterrows():
+                location_id = row['location_id']
+                is_verified = location_id in st.session_state['verified_locations']
+                
+                # Create a card-like UI for each location
+                with st.container():
+                    col1, col2, col3 = st.columns([3, 2, 1])
+                    
+                    with col1:
+                        # Location details
+                        status_color = "green" if is_verified else "orange"
+                        status = "✓ VERIFIED" if is_verified else "⟳ PENDING"
+                        
+                        st.markdown(f"""
+                        <div style='border-left: 5px solid {status_color}; padding-left: 10px;'>
+                        <h4 style='margin: 0;'>{location_id} <span style='color: {status_color}; font-size: 0.8em;'>{status}</span></h4>
+                        <p style='margin: 0;'>Zone: <b>{row['zone']}</b> • Type: <b>{row['location_type']}</b></p>
+                        <p style='margin: 0;'>Product: <b>{row['product_type']}</b></p>
+                        <p style='margin: 0;'>System Quantity: <b>{row['quantity']}</b></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        # Verification form
+                        if not is_verified:
+                            actual_qty = st.number_input(
+                                "Actual Qty", 
+                                min_value=0, 
+                                value=int(row['quantity']),
+                                key=f"qty_{location_id}"
+                            )
+                            
+                            notes = st.text_input(
+                                "Notes", 
+                                value="",
+                                key=f"notes_{location_id}"
+                            )
+                        else:
+                            # Display verified information
+                            verified_qty = st.session_state['verified_locations'][location_id]
+                            notes = st.session_state['notes'].get(location_id, "")
+                            
+                            st.markdown(f"""
+                            <div style='background-color: #f0f2f6; padding: 10px; border-radius: 5px;'>
+                            <p style='margin: 0;'>Verified Quantity: <b>{verified_qty}</b></p>
+                            <p style='margin: 0;'>Difference: <b>{verified_qty - row['quantity']}</b></p>
+                            <p style='margin: 0;'>Notes: {notes}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                    with col3:
+                        # Verification button or edit button
+                        if not is_verified:
+                            if st.button("Verify", key=f"verify_{location_id}"):
+                                actual_qty = st.session_state[f"qty_{location_id}"]
+                                notes_text = st.session_state[f"notes_{location_id}"]
+                                
+                                # Save verification
+                                st.session_state['verified_locations'][location_id] = actual_qty
+                                st.session_state['notes'][location_id] = notes_text
+                                st.experimental_rerun()
+                        else:
+                            if st.button("Edit", key=f"edit_{location_id}"):
+                                # Remove verification to allow editing
+                                del st.session_state['verified_locations'][location_id]
+                                if location_id in st.session_state['notes']:
+                                    del st.session_state['notes'][location_id]
+                                st.experimental_rerun()
+                    
+                    st.markdown("---")
+    
+    # Export stocktaking results
+    if len(st.session_state['verified_locations']) > 0:
+        st.subheader("Stocktaking Results")
+        
+        # Create a dataframe of verified locations
+        verified_data = []
+        for loc_id, actual_qty in st.session_state['verified_locations'].items():
+            loc_row = df[df['location_id'] == loc_id]
+            if not loc_row.empty:
+                row_data = loc_row.iloc[0]
+                verified_data.append({
+                    'location_id': loc_id,
+                    'zone': row_data['zone'],
+                    'product_type': row_data['product_type'],
+                    'location_type': row_data['location_type'],
+                    'system_quantity': row_data['quantity'],
+                    'actual_quantity': actual_qty,
+                    'difference': actual_qty - row_data['quantity'],
+                    'notes': st.session_state['notes'].get(loc_id, ""),
+                    'verification_date': st.session_state['stocktaking_date'],
+                    'verified_by': worker_name
+                })
+        
+        if verified_data:
+            verified_df = pd.DataFrame(verified_data)
+            st.dataframe(verified_df, use_container_width=True)
+            
+            # Download stocktaking results
+            csv = verified_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "Download Stocktaking Results",
+                csv,
+                f"stocktaking_results_{st.session_state['stocktaking_date']}.csv",
+                "text/csv",
+                key='download-stocktaking'
+            )
+            
+            # Reset button
+            if st.button("Reset Stocktaking Session"):
+                st.session_state['verified_locations'] = {}
+                st.session_state['notes'] = {}
+                st.success("Stocktaking session has been reset.")
+                st.experimental_rerun()
 
 # Footer appears outside of tabs
 st.markdown("---")
