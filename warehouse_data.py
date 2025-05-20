@@ -4,31 +4,54 @@ import random
 import ast
 
 def generate_realistic_warehouse():
-    """Generate a warehouse layout based on the provided image."""
+    """Generate a warehouse layout based on a clothing industry warehouse."""
     
     locations = []
     
-    # Define zone configurations
+    # Define zone configurations with clothing industry items
     zone_configs = {
-        "A": {"product": "12 oz Cans", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 220]},
-        "B": {"product": "12 oz Cans", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 200]},
-        "C": {"product": "12 oz Bottles", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 180]},
-        "D": {"product": "12 oz Bottles", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 160]},
-        "E": {"product": "12 oz Bottles", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 140]},
-        "F": {"product": "12 oz Bottles", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 120]},
-        "G": {"product": "16/24 Can", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 100]},
-        "H": {"product": "8/24 Can", "rows": 1, "cols": 20, "depth": 3, "color": [100, 0, 100]},
-        "J": {"product": "All Other", "rows": 1, "cols": 20, "depth": 3, "color": [120, 0, 0]},
-        "K": {"product": "Craft Back Stock", "rows": 6, "cols": 12, "depth": 2, "color": [160, 0, 0]},
-        "L": {"product": "Back Stock", "rows": 6, "cols": 10, "depth": 3, "color": [180, 0, 0]},
-        "M": {"product": "Craft Back Stock", "rows": 6, "cols": 8, "depth": 2, "color": [200, 0, 0]},
-        "N": {"product": "Back Flow", "rows": 4, "cols": 6, "depth": 1, "color": [0, 120, 0]},
-        "P": {"product": "NA", "rows": 6, "cols": 5, "depth": 1, "color": [0, 140, 0]},
-        "Q": {"product": "NA", "rows": 6, "cols": 5, "depth": 1, "color": [0, 160, 0]},
-        "R": {"product": "Craft Back Stock", "rows": 12, "cols": 6, "depth": 1, "color": [0, 180, 0]},
-        "S": {"product": "NA", "rows": 7, "cols": 10, "depth": 1, "color": [220, 120, 0]},
-        "T": {"product": "RECEIVING DOCK", "rows": 5, "cols": 3, "depth": 1, "color": [220, 220, 0]},
-        "U": {"product": "NA", "rows": 12, "cols": 6, "depth": 2, "color": [0, 220, 0]}
+        "A": {"product": "T-shirts", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 220]},
+        "B": {"product": "Jeans", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 200]},
+        "C": {"product": "Dresses", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 180]},
+        "D": {"product": "Sweaters", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 160]},
+        "E": {"product": "Jackets", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 140]},
+        "F": {"product": "Shoes", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 120]},
+        "G": {"product": "Accessories", "rows": 2, "cols": 20, "depth": 3, "color": [0, 0, 100]},
+        "H": {"product": "Socks", "rows": 1, "cols": 20, "depth": 3, "color": [100, 0, 100]},
+        "J": {"product": "Underwear", "rows": 1, "cols": 20, "depth": 3, "color": [120, 0, 0]},
+        "K": {"product": "Premium Apparel", "rows": 6, "cols": 12, "depth": 2, "color": [160, 0, 0]},
+        "L": {"product": "Seasonal Items", "rows": 6, "cols": 10, "depth": 3, "color": [180, 0, 0]},
+        "M": {"product": "Designer Brands", "rows": 6, "cols": 8, "depth": 2, "color": [200, 0, 0]},
+        "N": {"product": "New Arrivals", "rows": 4, "cols": 6, "depth": 1, "color": [0, 120, 0]},
+        "P": {"product": "Sale Items", "rows": 6, "cols": 5, "depth": 1, "color": [0, 140, 0]},
+        "Q": {"product": "Kids Clothing", "rows": 6, "cols": 5, "depth": 1, "color": [0, 160, 0]},
+        "R": {"product": "Plus Size Collection", "rows": 12, "cols": 6, "depth": 1, "color": [0, 180, 0]},
+        "S": {"product": "Athletic Wear", "rows": 7, "cols": 10, "depth": 1, "color": [220, 120, 0]},
+        "T": {"product": "Returns Processing", "rows": 5, "cols": 3, "depth": 1, "color": [220, 220, 0]},
+        "U": {"product": "Outbound Shipping", "rows": 12, "cols": 6, "depth": 2, "color": [0, 220, 0]}
+    }
+    
+    # Define location types based on product categories
+    location_types = {
+        "T-shirts": "Folded Shelves",
+        "Jeans": "Folded Shelves",
+        "Dresses": "Hanging Racks",
+        "Sweaters": "Folded Shelves",
+        "Jackets": "Hanging Racks",
+        "Shoes": "Shoe Racks",
+        "Accessories": "Small Item Bins",
+        "Socks": "Small Item Bins",
+        "Underwear": "Small Item Bins",
+        "Premium Apparel": "Secure Storage",
+        "Seasonal Items": "Bulk Storage",
+        "Designer Brands": "Secure Storage",
+        "New Arrivals": "Front-Facing Displays",
+        "Sale Items": "Sale Racks",
+        "Kids Clothing": "Age-Sorted Shelves",
+        "Plus Size Collection": "Size-Sorted Racks",
+        "Athletic Wear": "Activity-Sorted Racks",
+        "Returns Processing": "Sorting Area",
+        "Outbound Shipping": "Packing Station"
     }
     
     # Starting positions for each zone
@@ -53,12 +76,18 @@ def generate_realistic_warehouse():
         "T": {"x": 5, "y": 40, "z": 0},
         "U": {"x": 90, "y": 15, "z": 0}
     }
+
+    # Define sizes for apparel
+    sizes = ["XS", "S", "M", "L", "XL", "XXL"]
+    shoe_sizes = ["6", "7", "8", "9", "10", "11", "12"]
     
     # Create locations for each zone
     for zone_id, config in zone_configs.items():
         base_x = positions[zone_id]["x"]
         base_y = positions[zone_id]["y"]
         base_z = positions[zone_id]["z"]
+        product_type = config["product"]
+        location_type = location_types[product_type]
         
         for row in range(1, config["rows"] + 1):
             for col in range(1, config["cols"] + 1):
@@ -76,7 +105,16 @@ def generate_realistic_warehouse():
                     has_stock = random.random() > 0.3
                     
                     if has_stock:
-                        product_id = f"P{random.randint(1000, 9999)}"
+                        # Generate a realistic product ID based on item type
+                        if product_type == "Shoes":
+                            size = random.choice(shoe_sizes)
+                            style = random.choice(["Running", "Casual", "Dress", "Sport"])
+                            product_id = f"{style}-{size}"
+                        else:
+                            size = random.choice(sizes)
+                            color = random.choice(["Black", "White", "Blue", "Red", "Green", "Gray"])
+                            product_id = f"{product_type[:3]}-{color[:3]}-{size}"
+                            
                         quantity = random.randint(1, 20)
                     else:
                         product_id = None
@@ -89,7 +127,7 @@ def generate_realistic_warehouse():
                     
                     # Add special attributes based on zone
                     attributes = {
-                        "product_type": config["product"],
+                        "product_type": product_type,
                         "color": config["color"]
                     }
                     
@@ -105,7 +143,7 @@ def generate_realistic_warehouse():
                         "row": row,
                         "column": col,
                         "depth": depth,
-                        "location_type": "Storage",
+                        "location_type": location_type,
                         "product_id": product_id,
                         "quantity": quantity,
                         "product_type": attributes["product_type"],
@@ -125,10 +163,10 @@ def generate_realistic_warehouse():
             "row": i,
             "column": 1,
             "depth": 1,
-            "location_type": "Receiving",
+            "location_type": "Receiving Dock",
             "product_id": None,
             "quantity": 0,
-            "product_type": "Receiving Area",
+            "product_type": "Incoming Shipments",
             "x": 2,
             "y": 30 + i * 5,
             "z": 0,
